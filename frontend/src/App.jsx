@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
   ArrowRight, 
@@ -11,11 +11,21 @@ import {
   Globe, 
   Sun, 
   Moon,
-  SlidersHorizontal
+  ChevronDown
 } from 'lucide-react';
 
-const DEVICES = ['Desktop', 'Mobile', 'Tablet'];
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const DEVICES = [
+  { id: 'Desktop', label: 'Desktop', defaultW: 1920, defaultH: 1080 },
+  { id: 'Mobile', label: 'Mobile', defaultW: 390, defaultH: 844 },
+  { id: 'Tablet', label: 'Tablet', defaultW: 768, defaultH: 1024 },
+];
+
 const BROWSERS = ['Chrome', 'Firefox', 'Safari', 'Edge'];
+
 const OPERATING_SYSTEMS = ['Windows', 'macOS', 'Linux', 'Android', 'iOS'];
 
 const COUNTRIES = [
@@ -27,6 +37,8 @@ const COUNTRIES = [
   { code: 'IN', name: 'India', locale: 'en-IN', tz: 'Asia/Kolkata' },
   { code: 'JP', name: 'Japan', locale: 'ja-JP', tz: 'Asia/Tokyo' },
   { code: 'AU', name: 'Australia', locale: 'en-AU', tz: 'Australia/Sydney' },
+  { code: 'BR', name: 'Brazil', locale: 'pt-BR', tz: 'America/Sao_Paulo' },
+  { code: 'SG', name: 'Singapore', locale: 'en-SG', tz: 'Asia/Singapore' },
 ];
 
 const LOCALES = [
@@ -44,56 +56,282 @@ const LOCALES = [
 const TIMEZONES = [
   'America/New_York',
   'America/Chicago',
-  'America/Denver',
   'America/Los_Angeles',
   'Europe/London',
   'Europe/Berlin',
   'Europe/Paris',
   'Asia/Kolkata',
   'Asia/Tokyo',
+  'Asia/Singapore',
   'Australia/Sydney',
   'UTC',
 ];
 
-function getStandardUserAgent(browser, os, device) {
-  if (device === 'Mobile') {
-    if (os === 'iOS') {
-      return 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1';
+const RESOLUTION_PRESETS = [
+  { label: '1920 × 1080 (FHD)', width: 1920, height: 1080 },
+  { label: '1440 × 900 (Laptop)', width: 1440, height: 900 },
+  { label: '1366 × 768 (HD)', width: 1366, height: 768 },
+  { label: '2560 × 1440 (2K)', width: 2560, height: 1440 },
+  { label: '768 × 1024 (iPad)', width: 768, height: 1024 },
+  { label: '390 × 844 (Mobile)', width: 390, height: 844 },
+];
+
+// ============================================================================
+// CLEAN DROPDOWN COMPONENT (MATCHING USER SCREENSHOT EXACTLY)
+// ============================================================================
+function CleanDropdown({
+  id,
+  label,
+  value,
+  displayValue,
+  options,
+  onChange,
+  openId,
+  setOpenId,
+  isDark,
+  minWidth = 'min-w-[130px]',
+}) {
+  const isOpen = openId === id;
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        if (isOpen) setOpenId(null);
+      }
     }
-    return 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Mobile Safari/537.36';
-  }
-  if (device === 'Tablet') {
-    if (os === 'iOS') {
-      return 'Mozilla/5.0 (iPad; CPU OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1';
-    }
-    return 'Mozilla/5.0 (Linux; Android 14; Tablet) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
-  }
-  if (browser === 'Firefox') {
-    return os === 'macOS'
-      ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0'
-      : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0';
-  }
-  if (browser === 'Safari') {
-    return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15';
-  }
-  if (browser === 'Edge') {
-    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0';
-  }
-  return os === 'macOS'
-    ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
-    : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, setOpenId]);
+
+  return (
+    <div className={`relative inline-block ${minWidth}`} ref={containerRef}>
+      {/* Trigger Button */}
+      <button
+        type="button"
+        onClick={() => setOpenId(isOpen ? null : id)}
+        className={`w-full h-9 px-3 flex items-center justify-between rounded-lg text-xs font-normal border transition-colors cursor-pointer select-none ${
+          isOpen
+            ? 'border-blue-500 ring-1 ring-blue-500/40 ' + (isDark ? 'bg-[#182337] text-white' : 'bg-blue-50/50 text-blue-900')
+            : isDark
+            ? 'bg-[#141d2f] hover:bg-[#182337] border-slate-700/80 text-slate-200'
+            : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
+        }`}
+      >
+        <span className="truncate pr-2">
+          <span className={`text-[11px] mr-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            {label}:
+          </span>
+          <span className="font-medium">
+            {displayValue || value}
+          </span>
+        </span>
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-150 ${
+          isOpen ? 'rotate-180 text-blue-400' : isDark ? 'text-slate-400' : 'text-slate-500'
+        }`} />
+      </button>
+
+      {/* Floating Menu - Exactly matching user screenshot with zero scrollbar */}
+      {isOpen && (
+        <div className={`absolute top-full mt-1 left-0 min-w-full w-max max-w-xs z-50 rounded-lg border shadow-2xl overflow-hidden ${
+          isDark
+            ? 'bg-[#141d2f] border-slate-700/80 text-slate-200'
+            : 'bg-white border-slate-200 text-slate-800 shadow-slate-300/40'
+        }`}>
+          <div className="max-h-56 overflow-y-auto no-scrollbar py-0.5">
+            {options.map((opt) => {
+              const optId = typeof opt === 'object' ? opt.id || opt.code : opt;
+              const optLabel = typeof opt === 'object' ? opt.name || opt.label : opt;
+              const isSelected = optId === value || optLabel === value;
+
+              return (
+                <button
+                  key={optId}
+                  type="button"
+                  onClick={() => {
+                    onChange(optId);
+                    setOpenId(null);
+                  }}
+                  className={`w-full text-left px-3.5 py-2 text-xs transition-colors cursor-pointer block truncate ${
+                    isSelected
+                      ? 'bg-blue-600 text-white font-medium'
+                      : isDark
+                      ? 'hover:bg-[#1e2c44] text-slate-200'
+                      : 'hover:bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {optLabel}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-export default function App() {
-  // Day / Night Theme (true = dark, false = light)
-  const [isDark, setIsDark] = useState(true);
+// ============================================================================
+// CLEAN RESOLUTION DROPDOWN
+// ============================================================================
+function CleanResolutionDropdown({
+  width,
+  height,
+  setWidth,
+  setHeight,
+  openId,
+  setOpenId,
+  isDark,
+}) {
+  const isOpen = openId === 'res';
+  const containerRef = useRef(null);
 
-  // Input URL
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        if (isOpen) setOpenId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, setOpenId]);
+
+  return (
+    <div className="relative inline-block min-w-[145px]" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpenId(isOpen ? null : 'res')}
+        className={`w-full h-9 px-3 flex items-center justify-between rounded-lg text-xs font-normal border transition-colors cursor-pointer select-none ${
+          isOpen
+            ? 'border-blue-500 ring-1 ring-blue-500/40 ' + (isDark ? 'bg-[#182337] text-white' : 'bg-blue-50/50 text-blue-900')
+            : isDark
+            ? 'bg-[#141d2f] hover:bg-[#182337] border-slate-700/80 text-slate-200'
+            : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
+        }`}
+      >
+        <span className="truncate pr-2">
+          <span className={`text-[11px] mr-1.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+            Res:
+          </span>
+          <span className="font-medium font-mono">
+            {width} × {height}
+          </span>
+        </span>
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-150 ${
+          isOpen ? 'rotate-180 text-blue-400' : isDark ? 'text-slate-400' : 'text-slate-500'
+        }`} />
+      </button>
+
+      {isOpen && (
+        <div className={`absolute top-full mt-1 left-0 w-60 z-50 rounded-lg border shadow-2xl overflow-hidden p-1.5 ${
+          isDark
+            ? 'bg-[#141d2f] border-slate-700/80 text-slate-200'
+            : 'bg-white border-slate-200 text-slate-800 shadow-slate-300/40'
+        }`}>
+          {/* Presets List without scrollbar */}
+          <div className="no-scrollbar">
+            {RESOLUTION_PRESETS.map((preset) => {
+              const isSelected = preset.width === width && preset.height === height;
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => {
+                    setWidth(preset.width);
+                    setHeight(preset.height);
+                    setOpenId(null);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors cursor-pointer block truncate ${
+                    isSelected
+                      ? 'bg-blue-600 text-white font-medium'
+                      : isDark
+                      ? 'hover:bg-[#1e2c44] text-slate-200'
+                      : 'hover:bg-slate-100 text-slate-700'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom Dimension Inputs */}
+          <div className={`mt-2 pt-2 border-t flex items-center gap-1.5 px-1 ${
+            isDark ? 'border-slate-800' : 'border-slate-100'
+          }`}>
+            <input
+              type="number"
+              value={width}
+              onChange={(e) => setWidth(parseInt(e.target.value, 10) || 0)}
+              className={`w-20 text-center font-mono text-xs rounded border px-1.5 py-1 ${
+                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+              }`}
+              placeholder="Width"
+            />
+            <span className="text-slate-400 text-xs">×</span>
+            <input
+              type="number"
+              value={height}
+              onChange={(e) => setHeight(parseInt(e.target.value, 10) || 0)}
+              className={`w-20 text-center font-mono text-xs rounded border px-1.5 py-1 ${
+                isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'
+              }`}
+              placeholder="Height"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// CLEAN IP INPUT PILL
+// ============================================================================
+function CleanIpInput({ ipAddress, setIpAddress, isDark }) {
+  return (
+    <div className={`h-9 px-3 flex items-center rounded-lg text-xs border transition-colors ${
+      isDark
+        ? 'bg-[#141d2f] border-slate-700/80 text-slate-200 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/40'
+        : 'bg-white border-slate-300 text-slate-800 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500/40'
+    }`}>
+      <span className={`text-[11px] mr-1.5 select-none ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+        IP:
+      </span>
+      <input
+        type="text"
+        value={ipAddress}
+        onChange={(e) => setIpAddress(e.target.value)}
+        placeholder="Authorized IP"
+        className="w-24 font-mono text-xs bg-transparent focus:outline-none placeholder:opacity-40"
+      />
+      {ipAddress && (
+        <button
+          type="button"
+          onClick={() => setIpAddress('')}
+          className="ml-1 opacity-40 hover:opacity-100 p-0.5"
+          title="Clear"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// MAIN APP COMPONENT
+// ============================================================================
+export default function App() {
+  const [isDark, setIsDark] = useState(true);
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+
+  // URL State
   const [urlInput, setUrlInput] = useState('');
   const [activeUrl, setActiveUrl] = useState('');
   const [isOpen, setIsOpen] = useState(false);
 
-  // Configuration Fields
+  // Settings
   const [device, setDevice] = useState('Desktop');
   const [browser, setBrowser] = useState('Chrome');
   const [os, setOs] = useState('Windows');
@@ -103,52 +341,21 @@ export default function App() {
   const [locale, setLocale] = useState('en-US');
   const [timezone, setTimezone] = useState('America/New_York');
   const [ipAddress, setIpAddress] = useState('');
-  const [userAgent, setUserAgent] = useState(getStandardUserAgent('Chrome', 'Windows', 'Desktop'));
-
-  // Toggle User-Agent field
-  const [showUaRow, setShowUaRow] = useState(false);
 
   const handleDeviceChange = (newDevice) => {
     setDevice(newDevice);
-    let newWidth = 1920;
-    let newHeight = 1080;
-    let newOs = os;
-
+    const dev = DEVICES.find((d) => d.id === newDevice);
+    if (dev) {
+      setWidth(dev.defaultW);
+      setHeight(dev.defaultH);
+    }
     if (newDevice === 'Mobile') {
-      newWidth = 390;
-      newHeight = 844;
-      if (newOs !== 'iOS' && newOs !== 'Android') newOs = 'Android';
+      if (os !== 'iOS' && os !== 'Android') setOs('Android');
     } else if (newDevice === 'Tablet') {
-      newWidth = 768;
-      newHeight = 1024;
-      if (newOs !== 'iOS' && newOs !== 'Android') newOs = 'iOS';
+      if (os !== 'iOS' && os !== 'Android') setOs('iOS');
     } else {
-      newWidth = 1920;
-      newHeight = 1080;
-      if (newOs === 'iOS' || newOs === 'Android') newOs = 'Windows';
+      if (os === 'iOS' || os === 'Android') setOs('Windows');
     }
-
-    setWidth(newWidth);
-    setHeight(newHeight);
-    setOs(newOs);
-    setUserAgent(getStandardUserAgent(browser, newOs, newDevice));
-  };
-
-  const handleBrowserChange = (newBrowser) => {
-    setBrowser(newBrowser);
-    setUserAgent(getStandardUserAgent(newBrowser, os, device));
-  };
-
-  const handleOsChange = (newOs) => {
-    setOs(newOs);
-    let newDevice = device;
-    if (newOs === 'iOS' || newOs === 'Android') {
-      if (newDevice === 'Desktop') newDevice = 'Mobile';
-    } else {
-      if (newDevice !== 'Desktop') newDevice = 'Desktop';
-    }
-    setDevice(newDevice);
-    setUserAgent(getStandardUserAgent(browser, newOs, newDevice));
   };
 
   const handleCountryChange = (cCode) => {
@@ -160,22 +367,21 @@ export default function App() {
     }
   };
 
-  const handleOpenUrl = (e) => {
+  const handleActionToggle = (e) => {
     e?.preventDefault();
-    if (!urlInput.trim()) return;
-
-    let target = urlInput.trim();
-    if (!target.startsWith('http://') && !target.startsWith('https://')) {
-      target = 'https://' + target;
-      setUrlInput(target);
+    if (isOpen) {
+      setIsOpen(false);
+      setActiveUrl('');
+    } else {
+      if (!urlInput.trim()) return;
+      let target = urlInput.trim();
+      if (!target.startsWith('http://') && !target.startsWith('https://')) {
+        target = 'https://' + target;
+        setUrlInput(target);
+      }
+      setActiveUrl(target);
+      setIsOpen(true);
     }
-    setActiveUrl(target);
-    setIsOpen(true);
-  };
-
-  const handleDiscontinue = () => {
-    setIsOpen(false);
-    setActiveUrl('');
   };
 
   const getTabTitle = () => {
@@ -196,36 +402,38 @@ export default function App() {
     return 'New Tab';
   };
 
+  const selectedCountryObj = COUNTRIES.find((c) => c.code === country);
+
   return (
     <div className={`h-screen w-screen flex flex-col font-sans select-none overflow-hidden transition-colors duration-200 ${
       isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'
     }`}>
       {/* ========================================================
-          1. TOP WINDOW BAR (TABS, WINDOW CONTROLS, DAY/NIGHT TOGGLE)
+          1. HEADER: WINDOW DOTS, TAB, DAY/NIGHT TOGGLE
           ======================================================== */}
       <div className={`px-3 pt-2 pb-0 flex items-center justify-between border-b shrink-0 ${
-        isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-200 border-slate-300 text-slate-600'
+        isDark ? 'bg-slate-900/95 border-slate-800 text-slate-300' : 'bg-slate-200/90 border-slate-300 text-slate-600'
       }`}>
         <div className="flex items-center gap-3">
-          {/* Traffic Light Window Dots */}
+          {/* Traffic Light Window Controls */}
           <div className="flex items-center gap-1.5 pr-2">
-            <span className="w-3 h-3 rounded-full bg-rose-500 shadow-xs cursor-pointer" />
-            <span className="w-3 h-3 rounded-full bg-amber-500 shadow-xs cursor-pointer" />
-            <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-xs cursor-pointer" />
+            <span className="w-3 h-3 rounded-full bg-rose-500 shadow-xs cursor-pointer hover:opacity-80" />
+            <span className="w-3 h-3 rounded-full bg-amber-500 shadow-xs cursor-pointer hover:opacity-80" />
+            <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-xs cursor-pointer hover:opacity-80" />
           </div>
 
-          {/* Active Browser Tab */}
-          <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-t-lg text-xs font-semibold shadow-xs border-t border-x max-w-xs truncate ${
+          {/* Browser Tab */}
+          <div className={`flex items-center gap-2 px-4 py-1.5 rounded-t-xl text-xs font-semibold shadow-xs border-t border-x max-w-xs truncate transition-colors ${
             isDark 
-              ? 'bg-slate-800 text-slate-100 border-slate-700' 
+              ? 'bg-slate-800 text-slate-100 border-slate-700/80' 
               : 'bg-white text-slate-800 border-slate-300'
           }`}>
-            <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+            <Globe className="w-3.5 h-3.5 text-blue-500 shrink-0" />
             <span className="truncate">{getTabTitle()}</span>
             {isOpen && (
               <button
                 type="button"
-                onClick={handleDiscontinue}
+                onClick={() => { setIsOpen(false); setActiveUrl(''); }}
                 title="Close"
                 className={`p-0.5 rounded ml-1 ${isDark ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-200 text-slate-500'}`}
               >
@@ -236,7 +444,7 @@ export default function App() {
 
           <button
             type="button"
-            onClick={handleDiscontinue}
+            onClick={() => { setIsOpen(false); setActiveUrl(''); setUrlInput(''); }}
             title="New Tab"
             className={`p-1 rounded transition-colors ${
               isDark ? 'hover:bg-slate-800 text-slate-400 hover:text-slate-200' : 'hover:bg-slate-300 text-slate-500'
@@ -246,26 +454,26 @@ export default function App() {
           </button>
         </div>
 
-        {/* Day / Night Mode (Dark / Light) Toggle Button */}
-        <div className="flex items-center gap-2 pb-1">
+        {/* Day / Night Mode Toggle */}
+        <div className="flex items-center gap-2 pb-1.5">
           <button
             type="button"
             onClick={() => setIsDark((prev) => !prev)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold border transition-all ${
               isDark
-                ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-amber-400'
-                : 'bg-white hover:bg-slate-50 border-slate-300 text-indigo-600 shadow-xs'
+                ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-amber-400 shadow-sm'
+                : 'bg-white hover:bg-slate-50 border-slate-300 text-blue-600 shadow-xs'
             }`}
             title={isDark ? 'Switch to Day Mode (Light)' : 'Switch to Night Mode (Dark)'}
           >
             {isDark ? (
               <>
-                <Sun className="w-3.5 h-3.5" />
+                <Sun className="w-3.5 h-3.5 fill-current" />
                 <span className="text-[11px] text-slate-200">Day Mode</span>
               </>
             ) : (
               <>
-                <Moon className="w-3.5 h-3.5" />
+                <Moon className="w-3.5 h-3.5 fill-current" />
                 <span className="text-[11px] text-slate-700">Night Mode</span>
               </>
             )}
@@ -274,12 +482,11 @@ export default function App() {
       </div>
 
       {/* ========================================================
-          2. NAVIGATION & URL ADDRESS BAR
+          2. ADDRESS BAR WITH SINGLE ACTION BUTTON
           ======================================================== */}
-      <div className={`px-3 py-2 flex items-center gap-2.5 shrink-0 border-b shadow-xs ${
-        isDark ? 'bg-slate-900/90 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
+      <div className={`px-4 py-2 flex items-center gap-3 shrink-0 border-b shadow-xs ${
+        isDark ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-slate-100 border-slate-300 text-slate-800'
       }`}>
-        {/* Nav arrows & reload */}
         <div className="flex items-center gap-1 shrink-0">
           <button type="button" disabled className={`p-1.5 rounded disabled:opacity-30 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             <ArrowLeft className="w-4 h-4" />
@@ -305,260 +512,172 @@ export default function App() {
           </button>
         </div>
 
-        {/* URL Input Form */}
-        <form onSubmit={handleOpenUrl} className="flex-1 flex items-center gap-2">
-          <div className={`flex-1 flex items-center gap-2 border rounded-lg px-3 py-1.5 shadow-inner transition-all ${
+        {/* Address Bar & Single Action Button */}
+        <form onSubmit={handleActionToggle} className="flex-1 flex items-center gap-2">
+          <div className={`flex-1 flex items-center gap-2.5 border rounded-lg px-3.5 py-1.5 shadow-inner transition-colors ${
             isDark 
-              ? 'bg-slate-950 border-slate-700 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-900/40 text-slate-100' 
-              : 'bg-white border-slate-300 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-100 text-slate-900'
+              ? 'bg-[#141d2f] border-slate-700/80 focus-within:border-blue-500 text-slate-100' 
+              : 'bg-white border-slate-300 focus-within:border-blue-500 text-slate-900 shadow-xs'
           }`}>
-            <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <Lock className="w-4 h-4 text-emerald-500 shrink-0" />
             <input
               type="text"
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
-              placeholder="Enter URL to test (e.g. https://example.com)..."
-              className="w-full text-xs font-mono bg-transparent focus:outline-none placeholder:font-sans placeholder:opacity-50"
+              placeholder="Enter survey URL to test (e.g. https://example.com/survey)..."
+              className="w-full text-xs font-mono bg-transparent focus:outline-none placeholder:font-sans placeholder:opacity-40"
             />
-            {urlInput && (
+            {urlInput && !isOpen && (
               <button
                 type="button"
                 onClick={() => setUrlInput('')}
                 className="opacity-40 hover:opacity-100 p-0.5"
+                title="Clear URL"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Open URL Button */}
-          <button
-            type="submit"
-            disabled={!urlInput.trim()}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            Open URL
-          </button>
-
-          {/* Discontinue Button */}
-          <button
-            type="button"
-            onClick={handleDiscontinue}
-            disabled={!isOpen}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-[0.98] transition-all shadow-sm disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-          >
-            <Square className="w-3.5 h-3.5 fill-current" />
-            Discontinue
-          </button>
+          {!isOpen ? (
+            <button
+              type="submit"
+              disabled={!urlInput.trim()}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              Open URL
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleActionToggle}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 active:scale-[0.98] transition-all shadow-sm shrink-0"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+              Discontinue
+            </button>
+          )}
         </form>
-
-        {/* User-Agent toggle */}
-        <button
-          type="button"
-          onClick={() => setShowUaRow((prev) => !prev)}
-          className={`p-2 rounded-lg border transition-colors shrink-0 ${
-            showUaRow 
-              ? isDark ? 'bg-indigo-950 border-indigo-500 text-indigo-400' : 'bg-indigo-50 border-indigo-300 text-indigo-700'
-              : isDark ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'
-          }`}
-          title="Toggle User-Agent input"
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-        </button>
       </div>
 
       {/* ========================================================
-          3. COMPACT INPUTS & DROPDOWNS ROW
+          3. BEAUTIFUL DROPDOWNS & INPUTS TOOLBAR
+          Pixel-perfect matching user screenshots with ZERO scrollbars!
           ======================================================== */}
-      <div className={`px-3 py-2 text-xs shrink-0 border-b ${
-        isDark ? 'bg-slate-900 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-300 text-slate-700'
+      <div className={`px-4 py-2 text-xs shrink-0 border-b shadow-inner ${
+        isDark ? 'bg-slate-900/60 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-300/80 text-slate-700'
       }`}>
         <div className="flex flex-wrap items-center gap-2">
           {/* Device Dropdown */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">Device:</span>
-            <select
-              value={device}
-              onChange={(e) => handleDeviceChange(e.target.value)}
-              className={`bg-transparent font-medium text-xs focus:outline-none cursor-pointer ${
-                isDark ? 'text-slate-100 [&>option]:bg-slate-900' : 'text-slate-800 [&>option]:bg-white'
-              }`}
-            >
-              {DEVICES.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-          </div>
+          <CleanDropdown
+            id="device"
+            label="Device"
+            value={device}
+            options={DEVICES.map((d) => d.label)}
+            onChange={handleDeviceChange}
+            openId={openDropdownId}
+            setOpenId={setOpenDropdownId}
+            isDark={isDark}
+            minWidth="min-w-[125px]"
+          />
 
           {/* Browser Dropdown */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">Browser:</span>
-            <select
-              value={browser}
-              onChange={(e) => handleBrowserChange(e.target.value)}
-              className={`bg-transparent font-medium text-xs focus:outline-none cursor-pointer ${
-                isDark ? 'text-slate-100 [&>option]:bg-slate-900' : 'text-slate-800 [&>option]:bg-white'
-              }`}
-            >
-              {BROWSERS.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-          </div>
+          <CleanDropdown
+            id="browser"
+            label="Browser"
+            value={browser}
+            options={BROWSERS}
+            onChange={setBrowser}
+            openId={openDropdownId}
+            setOpenId={setOpenDropdownId}
+            isDark={isDark}
+            minWidth="min-w-[130px]"
+          />
 
           {/* OS Dropdown */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">OS:</span>
-            <select
-              value={os}
-              onChange={(e) => handleOsChange(e.target.value)}
-              className={`bg-transparent font-medium text-xs focus:outline-none cursor-pointer ${
-                isDark ? 'text-slate-100 [&>option]:bg-slate-900' : 'text-slate-800 [&>option]:bg-white'
-              }`}
-            >
-              {OPERATING_SYSTEMS.map((o) => (
-                <option key={o} value={o}>{o}</option>
-              ))}
-            </select>
-          </div>
+          <CleanDropdown
+            id="os"
+            label="OS"
+            value={os}
+            options={OPERATING_SYSTEMS}
+            onChange={setOs}
+            openId={openDropdownId}
+            setOpenId={setOpenDropdownId}
+            isDark={isDark}
+            minWidth="min-w-[125px]"
+          />
 
-          {/* Resolution Inputs */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">Res:</span>
-            <input
-              type="number"
-              value={width}
-              onChange={(e) => setWidth(parseInt(e.target.value, 10) || 1920)}
-              className="w-14 text-center font-mono text-xs focus:outline-none bg-transparent"
-              placeholder="W"
-            />
-            <span className="opacity-40 font-bold">×</span>
-            <input
-              type="number"
-              value={height}
-              onChange={(e) => setHeight(parseInt(e.target.value, 10) || 1080)}
-              className="w-14 text-center font-mono text-xs focus:outline-none bg-transparent"
-              placeholder="H"
-            />
-          </div>
+          {/* Resolution Dropdown */}
+          <CleanResolutionDropdown
+            width={width}
+            height={height}
+            setWidth={setWidth}
+            setHeight={setHeight}
+            openId={openDropdownId}
+            setOpenId={setOpenDropdownId}
+            isDark={isDark}
+          />
 
           {/* Country Dropdown */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">Country:</span>
-            <select
-              value={country}
-              onChange={(e) => handleCountryChange(e.target.value)}
-              className={`bg-transparent font-medium text-xs focus:outline-none cursor-pointer ${
-                isDark ? 'text-slate-100 [&>option]:bg-slate-900' : 'text-slate-800 [&>option]:bg-white'
-              }`}
-            >
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>{c.name} ({c.code})</option>
-              ))}
-            </select>
-          </div>
+          <CleanDropdown
+            id="country"
+            label="Country"
+            value={country}
+            displayValue={selectedCountryObj ? selectedCountryObj.name : country}
+            options={COUNTRIES.map((c) => ({ id: c.code, name: c.name }))}
+            onChange={handleCountryChange}
+            openId={openDropdownId}
+            setOpenId={setOpenDropdownId}
+            isDark={isDark}
+            minWidth="min-w-[155px]"
+          />
 
           {/* Locale Dropdown */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">Locale:</span>
-            <select
-              value={locale}
-              onChange={(e) => setLocale(e.target.value)}
-              className={`bg-transparent font-mono text-xs focus:outline-none cursor-pointer ${
-                isDark ? 'text-slate-100 [&>option]:bg-slate-900' : 'text-slate-800 [&>option]:bg-white'
-              }`}
-            >
-              {LOCALES.map((l) => (
-                <option key={l} value={l}>{l}</option>
-              ))}
-            </select>
-          </div>
+          <CleanDropdown
+            id="locale"
+            label="Locale"
+            value={locale}
+            options={LOCALES}
+            onChange={setLocale}
+            openId={openDropdownId}
+            setOpenId={setOpenDropdownId}
+            isDark={isDark}
+            minWidth="min-w-[120px]"
+          />
 
           {/* Timezone Dropdown */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">TZ:</span>
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className={`bg-transparent font-mono text-xs focus:outline-none cursor-pointer max-w-[130px] truncate ${
-                isDark ? 'text-slate-100 [&>option]:bg-slate-900' : 'text-slate-800 [&>option]:bg-white'
-              }`}
-            >
-              {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>{tz}</option>
-              ))}
-            </select>
-          </div>
+          <CleanDropdown
+            id="timezone"
+            label="TZ"
+            value={timezone}
+            options={TIMEZONES}
+            onChange={setTimezone}
+            openId={openDropdownId}
+            setOpenId={setOpenDropdownId}
+            isDark={isDark}
+            minWidth="min-w-[160px]"
+          />
 
-          {/* IP Address Input */}
-          <div className={`flex items-center gap-1 border rounded-md px-2 py-1 shadow-xs ${
-            isDark ? 'bg-slate-950 border-slate-700' : 'bg-white border-slate-300'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60">IP:</span>
-            <input
-              type="text"
-              value={ipAddress}
-              onChange={(e) => setIpAddress(e.target.value)}
-              placeholder="Authorized IP (Default)"
-              className="w-36 font-mono text-xs bg-transparent focus:outline-none placeholder:opacity-40"
-            />
-          </div>
+          {/* IP Input */}
+          <CleanIpInput
+            ipAddress={ipAddress}
+            setIpAddress={setIpAddress}
+            isDark={isDark}
+          />
         </div>
-
-        {/* User-Agent Row */}
-        {showUaRow && (
-          <div className={`flex items-center gap-2 pt-2 mt-2 border-t ${
-            isDark ? 'border-slate-800' : 'border-slate-200'
-          }`}>
-            <span className="text-[11px] font-semibold opacity-60 shrink-0">User-Agent:</span>
-            <input
-              type="text"
-              value={userAgent}
-              onChange={(e) => setUserAgent(e.target.value)}
-              placeholder="Mozilla/5.0..."
-              className={`flex-1 border rounded px-2 py-1 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
-                isDark ? 'bg-slate-950 border-slate-700 text-slate-100' : 'bg-white border-slate-300 text-slate-800'
-              }`}
-            />
-            <button
-              type="button"
-              onClick={() => setUserAgent(getStandardUserAgent(browser, os, device))}
-              className={`text-[11px] font-medium shrink-0 px-2 py-1 rounded ${
-                isDark ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-slate-200'
-              }`}
-            >
-              Reset UA
-            </button>
-          </div>
-        )}
       </div>
 
       {/* ========================================================
           4. CENTRAL BROWSER DISPLAY AREA
-          Zero static survey cards, zero mock questions.
-          Renders iframe when URL opened, or a completely clean viewport when blank.
+          Clean authentic viewport, zero mock cards, zero fake stats.
           ======================================================== */}
       <div className={`flex-1 p-2 sm:p-4 flex items-center justify-center overflow-hidden min-h-0 ${
         isDark ? 'bg-slate-950' : 'bg-slate-200'
       }`}>
         {isOpen && activeUrl ? (
           <div 
-            className={`rounded-lg shadow-xl border overflow-hidden flex flex-col h-full w-full ${
+            className={`rounded-xl shadow-2xl border overflow-hidden flex flex-col h-full w-full transition-all duration-200 ${
               isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
             }`}
             style={{
@@ -566,15 +685,15 @@ export default function App() {
               maxHeight: device === 'Mobile' ? '860px' : device === 'Tablet' ? '1040px' : '100%',
             }}
           >
-            {/* Viewport URL badge header */}
-            <div className={`px-3 py-1 flex items-center justify-between text-[11px] font-mono border-b select-none shrink-0 ${
+            {/* Viewport Info Sub-bar */}
+            <div className={`px-3.5 py-1.5 flex items-center justify-between text-[11px] font-mono border-b select-none shrink-0 ${
               isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'
             }`}>
-              <span className="flex items-center gap-1.5 truncate">
-                <Lock className="w-3 h-3 text-emerald-500" />
+              <span className="flex items-center gap-2 truncate">
+                <Lock className="w-3.5 h-3.5 text-emerald-500" />
                 <span className="truncate">{activeUrl}</span>
               </span>
-              <span>{width}×{height} ({device})</span>
+              <span className="font-semibold">{width}×{height} ({device})</span>
             </div>
 
             {/* Live Web Content Frame */}
@@ -586,8 +705,7 @@ export default function App() {
             />
           </div>
         ) : (
-          /* Blank clean browser viewport */
-          <div className="flex flex-col items-center justify-center text-center opacity-30 select-none">
+          <div className="flex flex-col items-center justify-center text-center opacity-20 select-none">
             <Globe className="w-16 h-16 stroke-[1.25] mb-2" />
           </div>
         )}
