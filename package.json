@@ -1,0 +1,16 @@
+{
+  "name": "survey-lab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix backend-node && npm install --prefix frontend",
+    "dev:node": "npm --prefix backend-node run dev",
+    "dev:python": "node scripts/run-python.js",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev": "concurrently -n \"NODE,PYTHON,FRONTEND\" -c \"blue,yellow,green\" \"npm run dev:node\" \"npm run dev:python\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
